@@ -1,0 +1,136 @@
+---
+title: "Preprocesamiento de Datos Modelo de Clasificación Prevención de Fraude "
+author: "Ing. Juan Sebastián Arboleda"
+date: "21 de octubre de 2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Lectura de datos
+
+```{r}
+library(readr)
+Fraud_Dataset_Data_ <- read_csv("Fraud Dataset  - Data .csv", 
+    col_types = cols(Fraude = col_integer()), 
+    locale = locale())
+
+Data <- Fraud_Dataset_Data_
+```
+
+# Exploración de los datos
+```{r}
+# Dimensión
+dim(Data)
+
+```
+
+```{r}
+# Resumen de los datos
+summary(Data)
+```
+```{r}
+library(corrplot)
+library(dplyr)
+
+#Un valor menor que 0 indica que existe una correlación negativa
+#Un valor mayor que 0 indica que existe una correlación positiva
+#una correlación de 0, o próxima a 0, indica que no hay relación lineal entre las dos variables
+
+Data_num <- select(Data,-J, -Fraude)
+corrplot(cor(Data_num),        # Matriz de correlación
+         method = "shade", # Método para el gráfico de correlación
+         type = "full",    # Estilo del gráfico (también "upper" y "lower")
+         diag = TRUE,      # Si TRUE (por defecto), añade la diagonal
+         tl.col = "black", # Color de las etiquetas
+         bg = "white",     # Color de fondo
+         title = "",       # Título
+         col = NULL)       # Paleta de colores
+```
+
+```{r}
+#correlacion
+library(psych)
+
+corPlot(Data_num[ ,4:9], cex = 1.2, main = "Matriz de correlación")
+corPlot(Data_num[ ,11:15], cex = 1.2, main = "Matriz de correlación")
+```
+
+```{r}
+# Cantidad de registros con información del tipo NA
+sum(is.na(Data))
+```
+
+```{r}
+# Identificamos en que columna estan los datos faltantes
+apply(X = is.na(Data), MARGIN = 2, FUN = sum)
+```
+
+```{r}
+# Identificamos en que columna estan los datos faltantes
+summary(Data$C)
+summary(Data$K)
+```
+
+
+
+
+# Preprocesamiento de los datos
+Dado que en la fase de exploración identifiqué la presencia de registros del tipo NA en las variables C y K, procedo a realizar algunas transformaciones buscando mejorar la calidad de los mismos. 
+Para el caso de la Variable C, en donde la presencia de faltantes no supera el 20% de los datos, vamos a completar esos faltantes con el valor del segundo quartil (la mediana). El valor promedio tambien es utilizado para ello, pero en este caso no es el mas acertado dado que la diferencia entre el tercer y cuarto quartil es muy amplia, lo que indica valores muy extremos que pueden afectar el valor promedio.
+
+```{r}
+Data$C <- ifelse(is.na(Data$C), median(Data$C, na.rm = TRUE), Data$C)
+summary(Data$C)
+```
+Nota: Observemos que luego del reemplazo la media de los datos no se afectó y la distribución de la variable mejoró.
+
+Para el caso de la variable K, en donde la cantidad de datos faltantes supera el 75% de sus datos, opté por no tener en cuenta esa variable en el análisis, dado que no aportaria confiabilidad.
+
+```{r}
+
+require(dplyr)
+Data <- select(Data, -K)
+Data
+```
+
+Continuando con el analisis, veo que la columna J es la única del tipo categórico y asumo hace referencia al país. 
+
+
+```{r}
+table(Data$J)  
+```
+
+La gran mayoria de los datos estan agrupados en solo 3 países, el resto suman una  particpacion menor al 5%, por ello veo conveniente agruparlos en una sola categoria.
+```{r}
+#Data$J [Data$J== c ("AU","CA","CH")] <- "Otros"
+#Data$J <- ifelse(Data$J == c("AU","CA","CH","CL","CO","ES","FR","GB","GT","IT","KR","PT","TR","UA","US","UY"), "Otros",Data$J) 
+Otros = c ("AR","BR","MX")
+Data$J <- ifelse(Data$J %in% Otros, Data$J,"Otros")
+table(Data$J)  
+```
+
+Buscando un formato mas amigable para los algoritmos, implemento la codificación one-hot encoding, de esta manera todas las variables quedaran bajo un formato numérico. Por último elimino la columna J original y escribo el archivo de salida con la data procesada que será modelada en python.
+
+
+```{r}
+library(fastDummies)
+Data <- dummy_cols(Data, select_columns = c("J"))
+Data <- select(Data, -J)
+```
+
+```{r}
+write.csv(Data, "Data_Limpia.csv",sep = ",",dec = ".",fileEncoding = "UTF-8")
+
+```
+
+
+
+
+
+
